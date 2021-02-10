@@ -86,3 +86,78 @@ function parseTask (line: string): Task {
 export function parse (todo: string): Array<Task> {
   return todo.split('\n').map(line => parseTask(line))
 }
+
+function composeTask (task: Task): string {
+  const completed = task.completed ? 'x' : ''
+  const priority = task.priority || ''
+  const completion = task.completion || ''
+  const creation = task.creation || ''
+  const description = task.description || ''
+  const tokens = []
+  if (completed) tokens.push(completed)
+  if (priority) tokens.push(priority)
+  if (completion) tokens.push(completion)
+  if (creation) tokens.push(creation)
+  if (description) tokens.push(description)
+  return tokens.join(' ')
+}
+
+export function compareTasks (a: Task, b: Task): number {
+  const strA = composeTask(a)
+  const strB = composeTask(b)
+  return strA < strB ? -1 : strA === strB ? 0 : 1
+}
+
+export class TodoTxt {
+  tasks: Array<Task>
+  projects: Set<string>
+  contexts: Set<string>
+
+  constructor () {
+    this.tasks = []
+    this.projects = new Set()
+    this.contexts = new Set()
+  }
+
+  updateTags (): TodoTxt {
+    this.projects.clear()
+    this.contexts.clear()
+    for (const task of this.tasks) {
+      task.projects?.forEach(tag => this.projects.add(tag))
+      task.contexts?.forEach(tag => this.contexts.add(tag))
+    }
+    return this
+  }
+
+  parse (todo: string): TodoTxt {
+    this.tasks = parse(todo)
+    return this.updateTags()
+  }
+
+  sort (compare: (a: Task, b: Task) => number = compareTasks): TodoTxt {
+    const todoTxt = new TodoTxt()
+    todoTxt.tasks = this.tasks.slice().sort(compare)
+    return todoTxt
+  }
+
+  filter (fn: (task: Task) => boolean): TodoTxt {
+    const todoTxt = new TodoTxt()
+    todoTxt.tasks = this.tasks.slice().filter(fn)
+    return todoTxt.updateTags()
+  }
+
+  toString (): string {
+    return this.tasks.map(task => composeTask(task)).join('\n')
+  }
+
+  suggestTags (prefix: string): Array<string> {
+    switch (prefix[0]) {
+      case '+':
+        return Array.from(this.projects).filter(tag => tag.startsWith(prefix))
+      case '@':
+        return Array.from(this.contexts).filter(tag => tag.startsWith(prefix))
+      default:
+        return []
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { Task, parse } from '../src/parser'
+import { Task, TodoTxt, compareTasks, parse } from '../src/parser'
 import * as assert from 'assert'
 
 function checkDesc (task: Task, description: string): void {
@@ -178,5 +178,207 @@ key: test description
     assert.ok(!task.contexts || task.contexts.length === 0)
     assert.ok(!task.pairs || task.pairs.length === 0)
     checkDesc(task, '')
+  })
+})
+
+it('compareTasks', () => {
+  const [a, b] = new TodoTxt().parse('(A)\n(B)').tasks
+  assert.ok(compareTasks(a, b) < 0)
+  assert.ok(compareTasks(a, a) === 0)
+  assert.ok(compareTasks(b, b) === 0)
+  assert.ok(compareTasks(b, a) > 0)
+})
+
+describe('TodoTxt', () => {
+  describe('constructor', () => {
+    it('should create object with no tasks or tags', () => {
+      const todoTxt = new TodoTxt()
+      assert.strictEqual(todoTxt.tasks.length, 0)
+      assert.strictEqual(todoTxt.projects.size, 0)
+      assert.strictEqual(todoTxt.contexts.size, 0)
+    })
+  })
+
+  describe('parse', () => {
+    function createTodoTxt () {
+      const todo = '+project1 @context1\n+project2 @context2'
+      return new TodoTxt().parse(todo)
+    }
+
+    it('should parse input string', () => {
+      const tasks = createTodoTxt().tasks
+      assert.strictEqual(tasks[0].description, '+project1 @context1')
+      assert.strictEqual(tasks[1].description, '+project2 @context2')
+    })
+
+    it('should automatically update tags', function () {
+      const todoTxt = createTodoTxt()
+      assert.ok(todoTxt.projects.has('+project1'))
+      assert.ok(todoTxt.projects.has('+project2'))
+      assert.ok(todoTxt.contexts.has('@context1'))
+      assert.ok(todoTxt.contexts.has('@context2'))
+      assert.strictEqual(todoTxt.projects.size, 2)
+      assert.strictEqual(todoTxt.contexts.size, 2)
+    })
+  })
+
+  describe('sort', () => {
+    function createTodoTxt () {
+      const todo = '(B) task 2\n(A) task 1'
+      return new TodoTxt().parse(todo)
+    }
+
+    it('should create a sorted TodoTxt without modifying the original', () => {
+      const original = createTodoTxt()
+      assert.strictEqual(original.tasks.length, 2)
+      assert.ok(original.tasks[0].priority)
+      assert.ok(original.tasks[1].priority)
+      assert.ok(compareTasks(original.tasks[0], original.tasks[1]) > 0)
+
+      const sorted = original.sort()
+      assert.strictEqual(sorted.tasks.length, 2)
+      assert.ok(sorted.tasks[0].priority)
+      assert.ok(sorted.tasks[1].priority)
+      assert.ok(compareTasks(sorted.tasks[0], sorted.tasks[1]) < 0)
+    })
+
+    describe('with compare function', () => {
+      it('should sort using the compare function', () => {
+        function inReverse (a: Task, b: Task) {
+          return compareTasks(b, a)
+        }
+        const sorted = createTodoTxt().sort()
+        const reversed = sorted.sort(inReverse)
+        assert.deepStrictEqual(sorted.tasks, reversed.tasks.reverse())
+      })
+    })
+  })
+
+  describe('filter', () => {
+    function createTodoTxt () {
+      const todo = `task1 +project
+task2 @context
+task3 +project
+task4 @context
+task5`
+      return new TodoTxt().parse(todo)
+    }
+
+    function withProject (tag: string) {
+      return function (task: Task): boolean {
+        return Boolean(task.projects?.includes(tag))
+      }
+    }
+
+    function withContext (tag: string) {
+      return function (task: Task): boolean {
+        return Boolean(task.contexts?.includes(tag))
+      }
+    }
+
+    it('should create a TodoTxt containing the filtered tasks with updated tags and without modifying the original TodoTxt', () => {
+      const original = createTodoTxt()
+
+      const projects = original.filter(withProject('+project'))
+      assert.strictEqual(projects.tasks.length, 2)
+      assert.strictEqual(projects.projects.size, 1)
+      assert.strictEqual(projects.contexts.size, 0)
+      assert.ok(projects.projects.has('+project'))
+
+      const contexts = original.filter(withContext('@context'))
+      assert.strictEqual(contexts.tasks.length, 2)
+      assert.strictEqual(contexts.projects.size, 0)
+      assert.strictEqual(contexts.contexts.size, 1)
+      assert.ok(contexts.contexts.has('@context'))
+
+      assert.strictEqual(original.tasks.length, 5)
+      assert.strictEqual(original.projects.size, 1)
+      assert.strictEqual(original.contexts.size, 1)
+      assert.ok(original.projects.has('+project'))
+      assert.ok(original.contexts.has('@context'))
+    })
+  })
+
+  describe('toString', () => {
+    it('should reconstruct todo.txt string', () => {
+      const todo = `x (A) 2021-01-01 2020-01-01 task
+2020-01-01 task
+task +project @context key:val`
+      const todoTxt = new TodoTxt().parse(todo)
+      assert.strictEqual(todo, String(todoTxt))
+    })
+
+    describe('with empty todo.txt', () => {
+      it('should return empty string', () => {
+        assert.strictEqual(String(new TodoTxt()), '')
+        assert.strictEqual(String(new TodoTxt().parse('')), '')
+      })
+    })
+  })
+
+  describe('suggestTags', () => {
+    function createTodoTxt () {
+      const todo = '+project1 +project2\n@context1 @context2'
+      return new TodoTxt().parse(todo)
+    }
+
+    describe('with invalid tag prefix', () => {
+      describe('on "+"', () => {
+        it('should return all project tags', () => {
+          const todoTxt = createTodoTxt()
+          const suggestions = todoTxt.suggestTags('+').sort()
+          assert.deepStrictEqual(suggestions, ['+project1', '+project2'])
+        })
+      })
+
+      describe('on "@"', () => {
+        it('should return all context tags', () => {
+          const todoTxt = createTodoTxt()
+          const suggestions = todoTxt.suggestTags('@').sort()
+          assert.deepStrictEqual(suggestions, ['@context1', '@context2'])
+        })
+      })
+
+      it('should return an empty array', () => {
+        const todoTxt = createTodoTxt()
+        assert.deepStrictEqual(todoTxt.suggestTags(''), [])
+        assert.deepStrictEqual(todoTxt.suggestTags('project'), [])
+        assert.deepStrictEqual(todoTxt.suggestTags('context'), [])
+      })
+    })
+
+    describe('with + prefix', () => {
+      it('should return project tags that match the prefix', () => {
+        const todoTxt = createTodoTxt()
+        const project = todoTxt.suggestTags('+project').sort()
+        assert.deepStrictEqual(project, ['+project1', '+project2'])
+
+        const project1 = todoTxt.suggestTags('+project1')
+        assert.deepStrictEqual(project1, ['+project1'])
+      })
+    })
+
+    describe('with @ prefix', () => {
+      it('should return context tags that match the prefix', () => {
+        const todoTxt = createTodoTxt()
+        const context = todoTxt.suggestTags('@context').sort()
+        assert.deepStrictEqual(context, ['@context1', '@context2'])
+
+        const context1 = todoTxt.suggestTags('@context1')
+        assert.deepStrictEqual(context1, ['@context1'])
+      })
+    })
+  })
+
+  describe('updateTags', () => {
+    describe('with tagless tasks', () => {
+      it('should not crash', () => {
+        const todoTxt = new TodoTxt()
+        todoTxt.tasks.push({})
+        todoTxt.updateTags()
+        assert.strictEqual(todoTxt.projects.size, 0)
+        assert.strictEqual(todoTxt.contexts.size, 0)
+      })
+    })
   })
 })
