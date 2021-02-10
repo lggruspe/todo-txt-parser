@@ -36,6 +36,8 @@ interface Task {
 }
 ```
 
+See `examples/`.
+
 License
 -------
 

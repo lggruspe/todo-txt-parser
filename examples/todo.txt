@@ -1,0 +1,4 @@
+x 2020-01-01 2021-01-01 task
+(A) 2020-01-01 task
+task +project @context1 key:val
+task @context2
