@@ -1,6 +1,11 @@
 todo-txt-parser
 ===============
 
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/lggruspe/todo-txt-parser/Node.js%20CI)
+[![codecov](https://codecov.io/gh/lggruspe/todo-txt-parser/branch/main/graph/badge.svg?token=KICVMONX12)](https://codecov.io/gh/lggruspe/todo-txt-parser)
+![npm (scoped)](https://img.shields.io/npm/v/@lggruspe/todo-txt-parser)
+![GitHub](https://img.shields.io/github/license/lggruspe/todo-txt-parser)
+
 todo.txt parser for Typescript/Javascript.
 
 Installation
